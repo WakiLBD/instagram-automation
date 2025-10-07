@@ -44,10 +44,10 @@ logger = logging.getLogger(__name__)
 api_app = Flask(__name__)
 CORS(api_app, origins=[WEB_DASHBOARD_URL])
 
-# Initialize rate limiter
+# Initialize rate limiter (Flask-Limiter v3 API)
 limiter = Limiter(
-    api_app,
-    key_func=get_remote_address,
+    get_remote_address,
+    app=api_app,
     default_limits=["200 per day", "50 per hour"]
 )
 
