@@ -72,7 +72,7 @@ class InstagramBot:
 
 **Ready to begin account creation automation!**
         """
-        await update.message.reply_text(welcome_message, parse_mode='Markdown')
+        await update.message.reply_text(welcome_message)
     
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command"""
@@ -95,7 +95,7 @@ class InstagramBot:
 
 **Note:** The bot will process accounts sequentially and save all data to Google Sheets.
         """
-        await update.message.reply_text(help_message, parse_mode='Markdown')
+        await update.message.reply_text(help_message)
     
     async def start_auto_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start_auto command"""
@@ -104,8 +104,7 @@ class InstagramBot:
             state = load_bot_state()
             if state['is_running']:
                 await update.message.reply_text(
-                    "⚠️ Automation is already running! Use `/stop` to stop it first.",
-                    parse_mode='Markdown'
+                    "⚠️ Automation is already running! Use /stop to stop it first."
                 )
                 return
             
@@ -119,15 +118,13 @@ class InstagramBot:
             accounts = load_gmail_accounts()
             if not accounts:
                 await update.message.reply_text(
-                    "❌ No Gmail accounts found! Please check your configuration.",
-                    parse_mode='Markdown'
+                    "❌ No Gmail accounts found! Please check your configuration."
                 )
                 return
             
             if start_index >= len(accounts):
                 await update.message.reply_text(
-                    f"❌ Starting index {start_index} is out of range. Total accounts: {len(accounts)}",
-                    parse_mode='Markdown'
+                    f"❌ Starting index {start_index} is out of range. Total accounts: {len(accounts)}"
                 )
                 return
             
@@ -152,13 +149,12 @@ class InstagramBot:
 
 ⏳ **Beginning account creation process...**
             """
-            await update.message.reply_text(confirmation_message, parse_mode='Markdown')
+            await update.message.reply_text(confirmation_message)
             
         except Exception as e:
             logger.error(f"Error starting automation: {e}")
             await update.message.reply_text(
-                f"❌ Error starting automation: {str(e)}",
-                parse_mode='Markdown'
+                f"❌ Error starting automation: {str(e)}"
             )
     
     async def stop_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -167,8 +163,7 @@ class InstagramBot:
             state = load_bot_state()
             if not state['is_running']:
                 await update.message.reply_text(
-                    "ℹ️ No automation is currently running.",
-                    parse_mode='Markdown'
+                    "ℹ️ No automation is currently running."
                 )
                 return
             
@@ -190,13 +185,12 @@ class InstagramBot:
 
 💾 **State saved. Use `/start_auto {state['current_index']}` to resume.**
             """
-            await update.message.reply_text(stop_message, parse_mode='Markdown')
+            await update.message.reply_text(stop_message)
             
         except Exception as e:
             logger.error(f"Error stopping automation: {e}")
             await update.message.reply_text(
-                f"❌ Error stopping automation: {str(e)}",
-                parse_mode='Markdown'
+                f"❌ Error stopping automation: {str(e)}"
             )
     
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -229,13 +223,12 @@ class InstagramBot:
 📈 **Success Rate:** {success_rate:.1f}%
 📋 **Total Accounts:** {len(accounts)}
             """
-            await update.message.reply_text(status_message, parse_mode='Markdown')
+            await update.message.reply_text(status_message)
             
         except Exception as e:
             logger.error(f"Error getting status: {e}")
             await update.message.reply_text(
-                f"❌ Error getting status: {str(e)}",
-                parse_mode='Markdown'
+                f"❌ Error getting status: {str(e)}"
             )
     
     def run_automation(self, start_index, chat_id):
@@ -316,7 +309,7 @@ class InstagramBot:
 📧 **Gmail:** {email}
 ⏰ **Started:** {time.strftime('%H:%M:%S')}
             """
-            await self.bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
+            await self.bot.send_message(chat_id=chat_id, text=message)
         except TelegramError as e:
             logger.error(f"Error sending progress update: {e}")
     
@@ -336,7 +329,7 @@ class InstagramBot:
 💾 **Saved to Google Sheets**
 ⏱️ **Processing time:** {account_data.get('processing_time', 'N/A')}
             """
-            await self.bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
+            await self.bot.send_message(chat_id=chat_id, text=message)
         except TelegramError as e:
             logger.error(f"Error sending success message: {e}")
     
@@ -356,7 +349,7 @@ class InstagramBot:
 • Failed: {load_bot_state()['failed']}
 • Remaining: {len(load_gmail_accounts()) - account_num}
             """
-            await self.bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
+            await self.bot.send_message(chat_id=chat_id, text=message)
         except TelegramError as e:
             logger.error(f"Error sending failure message: {e}")
     
@@ -382,7 +375,7 @@ class InstagramBot:
 
 🔄 **Use `/start_auto` to begin new session.**
             """
-            await self.bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
+            await self.bot.send_message(chat_id=chat_id, text=message)
         except TelegramError as e:
             logger.error(f"Error sending completion message: {e}")
     
