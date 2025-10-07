@@ -17,13 +17,26 @@ from automation_logic import *
 from database import DatabaseUtils, db_manager
 
 # Configure logging
+# Ensure log directory exists before creating FileHandler
+try:
+    log_dir = os.path.dirname(LOG_FILE)
+    if log_dir and not os.path.exists(log_dir):
+        os.makedirs(log_dir, exist_ok=True)
+except Exception:
+    # Fall back to stdout-only if we cannot create directories
+    pass
+
+handlers = [logging.StreamHandler()]
+try:
+    handlers.insert(0, logging.FileHandler(LOG_FILE))
+except Exception:
+    # If file handler fails (e.g., no write permission), continue with stdout only
+    pass
+
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(LOG_FILE),
-        logging.StreamHandler()
-    ]
+    handlers=handlers
 )
 logger = logging.getLogger(__name__)
 

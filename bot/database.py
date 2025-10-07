@@ -1,5 +1,5 @@
 # Database Models and Schema
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, Float
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, Float, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
@@ -121,7 +121,8 @@ class DatabaseManager:
         """Test database connection"""
         try:
             session = self.get_session()
-            session.execute("SELECT 1")
+            # Use SQLAlchemy text() for textual SQL per SA 2.x requirements
+            session.execute(text("SELECT 1"))
             session.close()
             return True
         except Exception as e:
