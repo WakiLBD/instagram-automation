@@ -7,10 +7,14 @@ class InstagramDashboard {
             total: 0,
             successful: 0,
             failed: 0,
+            pending: 0,
             successRate: 0
         };
         this.isRunning = false;
         this.updateInterval = null;
+        
+        // Get bot API URL from environment or use default
+        this.BOT_API_URL = window.BOT_API_URL || 'https://your-bot-render-url.onrender.com';
         
         this.init();
     }
@@ -55,23 +59,25 @@ class InstagramDashboard {
     
     async fetchBotStatus() {
         try {
-            // Simulate API call - replace with actual bot API endpoint
-            const response = await fetch('/api/bot/status');
+            const response = await fetch(`${BOT_API_URL}/api/bot/status`);
             if (response.ok) {
                 const data = await response.json();
                 this.botStatus = data.status;
                 this.isRunning = data.is_running;
                 this.stats = data.stats;
+            } else {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
         } catch (error) {
-            console.log('Bot API not available, using mock data');
-            // Mock data for development
+            console.error('Error fetching bot status:', error);
+            // Fallback to offline status
             this.botStatus = 'offline';
             this.isRunning = false;
             this.stats = {
                 total: 0,
                 successful: 0,
                 failed: 0,
+                pending: 0,
                 successRate: 0
             };
         }
@@ -79,32 +85,16 @@ class InstagramDashboard {
     
     async fetchAccounts() {
         try {
-            // Simulate API call - replace with actual accounts API endpoint
-            const response = await fetch('/api/accounts');
+            const response = await fetch(`${BOT_API_URL}/api/accounts`);
             if (response.ok) {
-                this.accounts = await response.json();
+                const data = await response.json();
+                this.accounts = data.accounts || [];
+            } else {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
         } catch (error) {
-            console.log('Accounts API not available, using mock data');
-            // Mock data for development
-            this.accounts = [
-                {
-                    id: 1,
-                    username: 'demo_user_1',
-                    email: 'demo1@example.com',
-                    status: 'successful',
-                    createdAt: '2024-01-15 10:30:00',
-                    secretKey: 'JBSWY3DPEHPK3PXP'
-                },
-                {
-                    id: 2,
-                    username: 'demo_user_2',
-                    email: 'demo2@example.com',
-                    status: 'failed',
-                    createdAt: '2024-01-15 10:35:00',
-                    secretKey: null
-                }
-            ];
+            console.error('Error fetching accounts:', error);
+            this.accounts = [];
         }
     }
     
@@ -118,8 +108,7 @@ class InstagramDashboard {
         
         this.showLoading(true);
         try {
-            // Simulate API call - replace with actual start API endpoint
-            const response = await fetch('/api/bot/start', {
+            const response = await fetch(`${BOT_API_URL}/api/bot/start`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -128,13 +117,15 @@ class InstagramDashboard {
             });
             
             if (response.ok) {
+                const data = await response.json();
                 this.isRunning = true;
                 this.botStatus = 'processing';
                 this.updateUI();
-                this.showToast('Automation started successfully!', 'success');
+                this.showToast(data.message || 'Automation started successfully!', 'success');
                 this.addActivityLog('Automation started from index ' + startIndex);
             } else {
-                throw new Error('Failed to start automation');
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to start automation');
             }
         } catch (error) {
             this.showToast('Error starting automation: ' + error.message, 'error');
@@ -151,19 +142,20 @@ class InstagramDashboard {
         
         this.showLoading(true);
         try {
-            // Simulate API call - replace with actual stop API endpoint
-            const response = await fetch('/api/bot/stop', {
+            const response = await fetch(`${BOT_API_URL}/api/bot/stop`, {
                 method: 'POST'
             });
             
             if (response.ok) {
+                const data = await response.json();
                 this.isRunning = false;
                 this.botStatus = 'offline';
                 this.updateUI();
-                this.showToast('Automation stopped successfully!', 'success');
+                this.showToast(data.message || 'Automation stopped successfully!', 'success');
                 this.addActivityLog('Automation stopped by user');
             } else {
-                throw new Error('Failed to stop automation');
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to stop automation');
             }
         } catch (error) {
             this.showToast('Error stopping automation: ' + error.message, 'error');
@@ -265,7 +257,8 @@ class InstagramDashboard {
             <div class="account-item ${account.status}">
                 <div class="account-info">
                     <div class="account-username">@${account.username}</div>
-                    <div class="account-email">${account.email}</div>
+                    <div class="account-email">${account.temp_email || account.email}</div>
+                    <div class="account-time">${account.created_at}</div>
                 </div>
                 <div class="account-status ${account.status}">${account.status}</div>
             </div>

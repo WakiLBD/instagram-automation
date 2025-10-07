@@ -45,32 +45,47 @@ instagram-automation/
 
 ## ⚙️ Configuration Steps
 
-### 1. Gmail Accounts Setup
-Edit `shared/gmail_accounts.txt`:
+### 1. Database Setup
+The system now uses PostgreSQL database instead of files for data persistence.
+
+**Database URL**: `postgresql://instagram_bot_db_80km_user:klys5axBI9deyq12UQ6jYgUUrulpLzWY@dpg-d3iab0gdl3ps73d25up0-a/instagram_bot_db_80km`
+
+### 2. Gmail Accounts Setup
+Add Gmail accounts to the database using the initialization script:
+
+```bash
+# Add accounts from file
+python db_init.py load /path/to/gmail_accounts.txt
+
+# Or add accounts manually via database
+```
+
+**Gmail accounts file format** (`gmail_accounts.txt`):
 ```
 your-email1@gmail.com,your-app-password-1
 your-email2@gmail.com,your-app-password-2
 your-email3@gmail.com,your-app-password-3
 ```
 
-### 2. Static Password
-Edit `shared/password.txt`:
+### 3. Static Password Configuration
+Set the static password in environment variables:
 ```
-YourSecurePassword123!
+STATIC_PASSWORD=YourSecurePassword123!
 ```
 
-### 3. Google Sheets Setup
+### 4. Google Sheets Setup (Optional)
 1. Create Google Sheet named "Instagram Accounts Database"
 2. Create worksheet named "Accounts"
 3. Add headers: Username, Email, Password, 2FA Key, Created At, Status
 4. Download service account credentials as `shared/credentials.json`
 
-### 4. Bot Configuration
-Edit `bot/config.py` if needed:
+### 5. Bot Configuration
+The bot configuration is now handled via environment variables:
+
 ```python
 BOT_TOKEN = "8377225782:AAE3jApxu-Tuadu8Sot85pN9QNt3JHytg3o"
-SPREADSHEET_NAME = "Instagram Accounts Database"
-WORKSHEET_NAME = "Accounts"
+DATABASE_URL = "postgresql://instagram_bot_db_80km_user:klys5axBI9deyq12UQ6jYgUUrulpLzWY@dpg-d3iab0gdl3ps73d25up0-a/instagram_bot_db_80km"
+STATIC_PASSWORD = "YourSecurePassword123!"
 ```
 
 ## 🔧 Local Development
@@ -79,6 +94,14 @@ WORKSHEET_NAME = "Accounts"
 ```bash
 cd bot
 pip install -r requirements.txt
+
+# Initialize database
+python db_init.py init
+
+# Add Gmail accounts
+python db_init.py load ../shared/gmail_accounts.txt
+
+# Start bot
 python main_bot.py
 ```
 

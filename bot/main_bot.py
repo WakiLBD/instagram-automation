@@ -2,13 +2,19 @@ import asyncio
 import threading
 import time
 import logging
+from datetime import datetime
 from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, ContextTypes
 from telegram.error import TelegramError
 import json
 import os
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from config import *
 from automation_logic import *
+from database import DatabaseUtils, db_manager
 
 # Configure logging
 logging.basicConfig(
@@ -20,6 +26,17 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Initialize Flask app for API
+api_app = Flask(__name__)
+CORS(api_app, origins=[WEB_DASHBOARD_URL])
+
+# Initialize rate limiter
+limiter = Limiter(
+    api_app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
 
 class InstagramBot:
     def __init__(self):
@@ -414,6 +431,191 @@ class InstagramBot:
         except Exception as e:
             logger.error(f"Error running bot: {e}")
 
+# API Endpoints for Web Dashboard
+@api_app.route('/api/bot/status')
+@limiter.limit("10 per minute")
+def api_bot_status():
+    """Get current bot status and statistics"""
+    try:
+        state = load_bot_state()
+        stats = DatabaseUtils.get_statistics()
+        
+        return jsonify({
+            'status': 'online' if state['is_running'] else 'offline',
+            'is_running': state['is_running'],
+            'stats': {
+                'total': stats['total'],
+                'successful': stats['successful'],
+                'failed': stats['failed'],
+                'pending': stats['pending'],
+                'successRate': stats['success_rate']
+            },
+            'bot_state': state
+        })
+    except Exception as e:
+        logger.error(f"Error getting bot status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api_app.route('/api/bot/start', methods=['POST'])
+@limiter.limit("5 per hour")
+def api_start_bot():
+    """Start automation process"""
+    try:
+        data = request.get_json()
+        start_index = data.get('startIndex', 0) if data else 0
+        
+        # Check if automation is already running
+        state = load_bot_state()
+        if state['is_running']:
+            return jsonify({'error': 'Automation is already running'}), 400
+        
+        # Validate start index
+        accounts = load_gmail_accounts()
+        if start_index >= len(accounts):
+            return jsonify({'error': f'Start index {start_index} is out of range. Total accounts: {len(accounts)}'}), 400
+        
+        # Start automation in background thread
+        bot_instance = InstagramBot()
+        bot_instance.automation_thread = threading.Thread(
+            target=bot_instance.run_automation,
+            args=(start_index, None)  # No chat_id for API calls
+        )
+        bot_instance.automation_thread.daemon = True
+        bot_instance.automation_thread.start()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Automation started',
+            'startIndex': start_index
+        })
+    except Exception as e:
+        logger.error(f"Error starting automation: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api_app.route('/api/bot/stop', methods=['POST'])
+@limiter.limit("5 per hour")
+def api_stop_bot():
+    """Stop automation process"""
+    try:
+        state = load_bot_state()
+        if not state['is_running']:
+            return jsonify({'error': 'No automation is currently running'}), 400
+        
+        # Stop automation
+        DatabaseUtils.update_bot_state(is_running=False)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Automation stopped'
+        })
+    except Exception as e:
+        logger.error(f"Error stopping automation: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api_app.route('/api/accounts')
+@limiter.limit("20 per minute")
+def api_get_accounts():
+    """Get Instagram accounts"""
+    try:
+        status = request.args.get('status')
+        limit = int(request.args.get('limit', 100))
+        offset = int(request.args.get('offset', 0))
+        
+        accounts = DatabaseUtils.get_instagram_accounts(status)
+        
+        # Apply pagination
+        total = len(accounts)
+        accounts = accounts[offset:offset + limit]
+        
+        # Convert to JSON-serializable format
+        accounts_data = []
+        for account in accounts:
+            accounts_data.append({
+                'id': account.id,
+                'username': account.username,
+                'email': account.email,
+                'temp_email': account.temp_email,
+                'status': account.status,
+                'created_at': account.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'processing_time': account.processing_time,
+                'error_message': account.error_message
+            })
+        
+        return jsonify({
+            'accounts': accounts_data,
+            'total': total,
+            'limit': limit,
+            'offset': offset
+        })
+    except Exception as e:
+        logger.error(f"Error getting accounts: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api_app.route('/api/logs')
+@limiter.limit("20 per minute")
+def api_get_logs():
+    """Get recent automation logs"""
+    try:
+        limit = int(request.args.get('limit', 50))
+        logs = DatabaseUtils.get_recent_logs(limit)
+        
+        logs_data = []
+        for log in logs:
+            logs_data.append({
+                'id': log.id,
+                'level': log.level,
+                'message': log.message,
+                'account_id': log.account_id,
+                'created_at': log.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            })
+        
+        return jsonify({'logs': logs_data})
+    except Exception as e:
+        logger.error(f"Error getting logs: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api_app.route('/health')
+def health_check():
+    """Health check endpoint"""
+    try:
+        # Test database connection
+        db_healthy = db_manager.test_connection()
+        
+        return jsonify({
+            'status': 'healthy' if db_healthy else 'unhealthy',
+            'timestamp': time.time(),
+            'database': 'connected' if db_healthy else 'disconnected',
+            'bot_running': load_bot_state()['is_running']
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e)
+        }), 500
+
+def run_api_server():
+    """Run Flask API server"""
+    try:
+        logger.info("Starting API server on port 5000...")
+        api_app.run(host='0.0.0.0', port=5000, debug=False)
+    except Exception as e:
+        logger.error(f"Error running API server: {e}")
+
 if __name__ == "__main__":
+    # Initialize database
+    try:
+        if db_manager.test_connection():
+            logger.info("Database connection successful")
+        else:
+            logger.error("Database connection failed")
+    except Exception as e:
+        logger.error(f"Database initialization error: {e}")
+    
+    # Start API server in background thread
+    api_thread = threading.Thread(target=run_api_server)
+    api_thread.daemon = True
+    api_thread.start()
+    
+    # Start Telegram bot
     bot = InstagramBot()
     bot.run()

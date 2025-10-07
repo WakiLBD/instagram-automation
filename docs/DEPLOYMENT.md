@@ -65,33 +65,39 @@ Add these environment variables in Render dashboard:
 
 ```
 BOT_TOKEN=8377225782:AAE3jApxu-Tuadu8Sot85pN9QNt3JHytg3o
+DATABASE_URL=postgresql://instagram_bot_db_80km_user:klys5axBI9deyq12UQ6jYgUUrulpLzWY@dpg-d3iab0gdl3ps73d25up0-a/instagram_bot_db_80km
+STATIC_PASSWORD=YourSecurePassword123!
 SPREADSHEET_NAME=Instagram Accounts Database
 WORKSHEET_NAME=Accounts
 HEADLESS_MODE=True
 DELAY_BETWEEN_ACCOUNTS=30
-GMAIL_ACCOUNTS_FILE=/opt/render/project/src/shared/gmail_accounts.txt
-PASSWORD_FILE=/opt/render/project/src/shared/password.txt
-BOT_STATE_FILE=/opt/render/project/src/shared/bot_state.json
-CREDENTIALS_FILE=/opt/render/project/src/shared/credentials.json
 WEB_DASHBOARD_URL=https://your-netlify-app.netlify.app
 LOG_LEVEL=INFO
-LOG_FILE=/opt/render/project/src/logs/bot.log
+LOG_FILE=/app/logs/bot.log
+DB_POOL_SIZE=5
+DB_MAX_OVERFLOW=10
+DB_POOL_TIMEOUT=30
 ```
 
-### Step 4: Upload Shared Files
+### Step 4: Initialize Database
 
-1. **Create Persistent Disk**
-   - In Render dashboard, go to "Disks"
-   - Create new disk: `shared-data`
-   - Size: 1GB
-   - Mount path: `/opt/render/project/src/shared`
+Since we're using PostgreSQL instead of files, we need to initialize the database:
 
-2. **Upload Files**
-   - Use Render's file manager
-   - Upload `gmail_accounts.txt`
-   - Upload `password.txt`
-   - Upload `bot_state.json`
-   - Upload `credentials.json`
+1. **Deploy the bot first** to create the database tables
+2. **Add Gmail accounts** using the database initialization script
+3. **Test the connection** to ensure everything works
+
+**Database initialization commands:**
+```bash
+# Initialize database tables
+python db_init.py init
+
+# Add Gmail accounts from file
+python db_init.py load /path/to/gmail_accounts.txt
+
+# Check database status
+python db_init.py status
+```
 
 ### Step 5: Deploy Bot
 

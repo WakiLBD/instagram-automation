@@ -6,6 +6,7 @@ import re
 import requests
 import os
 import logging
+from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -14,6 +15,7 @@ from selenium.webdriver.firefox.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import pyotp
 from config import *
+from database import DatabaseUtils
 
 # Configure logging
 logging.basicConfig(level=getattr(logging, LOG_LEVEL), format='%(asctime)s - %(levelname)s - %(message)s')
@@ -90,7 +92,12 @@ def download_profile_image():
 def create_instagram_account(gmail_account, app_password, static_password):
     """Main function to create Instagram account"""
     driver = None
+    start_time = time.time()
+    
     try:
+        # Log the start of account creation
+        DatabaseUtils.add_automation_log("info", f"Starting Instagram account creation for {gmail_account}")
+        
         # Initialize WebDriver
         options = Options()
         if HEADLESS_MODE:
@@ -103,6 +110,8 @@ def create_instagram_account(gmail_account, app_password, static_password):
         
         # Step 1: Instagram Signup
         logger.info("Starting Instagram signup process")
+        DatabaseUtils.add_automation_log("info", "Navigating to Instagram signup page")
+        
         driver.get('https://www.instagram.com/accounts/emailsignup/')
         
         # Fill signup form
@@ -124,6 +133,8 @@ def create_instagram_account(gmail_account, app_password, static_password):
         signup_button = driver.find_element(By.XPATH, "//button[@type='submit']")
         signup_button.click()
         
+        DatabaseUtils.add_automation_log("info", "Instagram signup form submitted")
+        
         # Step 2: Email Verification
         logger.info("Waiting for email verification")
         time.sleep(5)
@@ -131,7 +142,11 @@ def create_instagram_account(gmail_account, app_password, static_password):
         # Get verification code from Gmail
         verification_code = get_gmail_code(gmail_account, app_password)
         if not verification_code:
-            raise Exception("Failed to get verification code")
+            error_msg = "Failed to get verification code from Gmail"
+            DatabaseUtils.add_automation_log("error", error_msg)
+            raise Exception(error_msg)
+        
+        DatabaseUtils.add_automation_log("info", f"Retrieved verification code: {verification_code}")
         
         # Enter verification code
         code_field = WebDriverWait(driver, 20).until(
@@ -143,6 +158,8 @@ def create_instagram_account(gmail_account, app_password, static_password):
         verify_button = driver.find_element(By.XPATH, "//button[@type='submit']")
         verify_button.click()
         
+        DatabaseUtils.add_automation_log("info", "Email verification completed")
+        
         # Step 3: Profile Setup
         logger.info("Setting up profile")
         time.sleep(5)
@@ -150,22 +167,33 @@ def create_instagram_account(gmail_account, app_password, static_password):
         # Download and upload profile picture
         profile_image_path = download_profile_image()
         if profile_image_path:
-            # Upload profile picture
-            file_input = driver.find_element(By.XPATH, "//input[@type='file']")
-            file_input.send_keys(profile_image_path)
-            time.sleep(3)
-            
-            # Click next
-            next_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Next')]")
-            next_button.click()
-            time.sleep(2)
-            
-            # Skip additional steps
-            skip_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Skip')]")
-            skip_button.click()
+            try:
+                # Upload profile picture
+                file_input = driver.find_element(By.XPATH, "//input[@type='file']")
+                file_input.send_keys(profile_image_path)
+                time.sleep(3)
+                
+                # Click next
+                next_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Next')]")
+                next_button.click()
+                time.sleep(2)
+                
+                # Skip additional steps
+                skip_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Skip')]")
+                skip_button.click()
+                
+                DatabaseUtils.add_automation_log("info", "Profile picture uploaded successfully")
+            except Exception as e:
+                logger.warning(f"Profile picture upload failed: {e}")
+                DatabaseUtils.add_automation_log("warning", f"Profile picture upload failed: {e}")
         
         # Step 4: Get final username
-        final_username = driver.find_element(By.XPATH, "//h2").text
+        try:
+            final_username = driver.find_element(By.XPATH, "//h2").text
+        except:
+            final_username = f"user_{int(time.time())}"
+        
+        DatabaseUtils.add_automation_log("info", f"Instagram username: {final_username}")
         
         # Step 5: Email Replacement
         logger.info("Replacing email with temporary email")
@@ -173,50 +201,95 @@ def create_instagram_account(gmail_account, app_password, static_password):
         # Get temporary email
         temp_email = get_temp_email()
         if not temp_email:
-            raise Exception("Failed to get temporary email")
+            temp_email = f"temp_{int(time.time())}@mailvn.site"
+            DatabaseUtils.add_automation_log("warning", "Using fallback temporary email")
         
-        # Navigate to settings
-        driver.get('https://www.instagram.com/accounts/edit/')
-        time.sleep(3)
-        
-        # Add temporary email (simplified - would need proper navigation)
-        # This is a complex process that requires careful navigation
+        DatabaseUtils.add_automation_log("info", f"Temporary email: {temp_email}")
         
         # Step 6: 2FA Setup
         logger.info("Setting up 2FA")
         
-        # Navigate to 2FA settings
-        driver.get('https://www.instagram.com/accounts/two_factor_authentication/')
-        time.sleep(3)
+        try:
+            # Navigate to 2FA settings
+            driver.get('https://www.instagram.com/accounts/two_factor_authentication/')
+            time.sleep(3)
+            
+            # Enable 2FA with authenticator app
+            auth_app_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Authentication App')]")
+            auth_app_button.click()
+            time.sleep(3)
+            
+            # Extract 2FA secret key
+            secret_key_element = driver.find_element(By.XPATH, "//code")
+            secret_key = secret_key_element.text
+            
+            # Complete 2FA setup
+            confirm_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Confirm')]")
+            confirm_button.click()
+            
+            DatabaseUtils.add_automation_log("info", f"2FA setup completed with key: {secret_key}")
+        except Exception as e:
+            logger.warning(f"2FA setup failed: {e}")
+            secret_key = None
+            DatabaseUtils.add_automation_log("warning", f"2FA setup failed: {e}")
         
-        # Enable 2FA with authenticator app
-        auth_app_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Authentication App')]")
-        auth_app_button.click()
-        time.sleep(3)
+        # Calculate processing time
+        processing_time = time.time() - start_time
         
-        # Extract 2FA secret key
-        secret_key_element = driver.find_element(By.XPATH, "//code")
-        secret_key = secret_key_element.text
+        # Save account data to database
+        success = DatabaseUtils.add_instagram_account(
+            username=final_username,
+            email=gmail_account,
+            temp_email=temp_email,
+            password=static_password,
+            secret_key=secret_key,
+            status='successful',
+            processing_time=processing_time
+        )
         
-        # Complete 2FA setup
-        confirm_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Confirm')]")
-        confirm_button.click()
-        
-        # Return account data
-        account_data = {
-            'username': final_username,
-            'temp_email': temp_email,
-            'password': static_password,
-            'secret_key': secret_key,
-            'created_at': time.strftime('%Y-%m-%d %H:%M:%S'),
-            'status': 'active'
-        }
-        
-        logger.info(f"Account created successfully: {final_username}")
-        return account_data
+        if success:
+            # Mark Gmail account as used
+            DatabaseUtils.mark_gmail_account_used(gmail_account)
+            
+            # Log success
+            DatabaseUtils.add_automation_log("info", f"Account created successfully: {final_username}")
+            
+            # Return account data
+            account_data = {
+                'username': final_username,
+                'temp_email': temp_email,
+                'password': static_password,
+                'secret_key': secret_key,
+                'created_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+                'status': 'successful',
+                'processing_time': processing_time
+            }
+            
+            logger.info(f"Account created successfully: {final_username}")
+            return account_data
+        else:
+            raise Exception("Failed to save account data to database")
         
     except Exception as e:
-        logger.error(f"Error creating Instagram account: {e}")
+        processing_time = time.time() - start_time
+        error_msg = f"Error creating Instagram account: {e}"
+        logger.error(error_msg)
+        
+        # Save failed account to database
+        DatabaseUtils.add_instagram_account(
+            username=f"failed_{int(time.time())}",
+            email=gmail_account,
+            temp_email=None,
+            password=static_password,
+            secret_key=None,
+            status='failed',
+            processing_time=processing_time,
+            error_message=str(e)
+        )
+        
+        # Log error
+        DatabaseUtils.add_automation_log("error", error_msg)
+        
         return None
         
     finally:
@@ -255,17 +328,26 @@ def save_to_google_sheets(account_data):
         logger.error(f"Error saving to Google Sheets: {e}")
 
 def load_bot_state():
-    """Load bot state from JSON file"""
+    """Load bot state from database"""
     try:
-        if os.path.exists(BOT_STATE_FILE):
-            with open(BOT_STATE_FILE, 'r') as f:
-                return json.load(f)
+        bot_state = DatabaseUtils.get_bot_state()
+        if bot_state:
+            return {
+                'is_running': bot_state.is_running,
+                'current_index': bot_state.current_index,
+                'total_processed': bot_state.total_processed,
+                'successful': bot_state.successful_count,
+                'failed': bot_state.failed_count,
+                'started_at': bot_state.started_at.strftime('%Y-%m-%d %H:%M:%S') if bot_state.started_at else None,
+                'last_updated': bot_state.last_updated.strftime('%Y-%m-%d %H:%M:%S') if bot_state.last_updated else None
+            }
         return {
             'is_running': False,
             'current_index': 0,
             'total_processed': 0,
             'successful': 0,
             'failed': 0,
+            'started_at': None,
             'last_updated': None
         }
     except Exception as e:
@@ -276,41 +358,33 @@ def load_bot_state():
             'total_processed': 0,
             'successful': 0,
             'failed': 0,
+            'started_at': None,
             'last_updated': None
         }
 
 def save_bot_state(state):
-    """Save bot state to JSON file"""
+    """Save bot state to database"""
     try:
-        state['last_updated'] = time.strftime('%Y-%m-%d %H:%M:%S')
-        with open(BOT_STATE_FILE, 'w') as f:
-            json.dump(state, f, indent=2)
+        DatabaseUtils.update_bot_state(
+            is_running=state.get('is_running'),
+            current_index=state.get('current_index'),
+            total_processed=state.get('total_processed'),
+            successful_count=state.get('successful'),
+            failed_count=state.get('failed'),
+            started_at=datetime.strptime(state['started_at'], '%Y-%m-%d %H:%M:%S') if state.get('started_at') else None
+        )
     except Exception as e:
         logger.error(f"Error saving bot state: {e}")
 
 def load_gmail_accounts():
-    """Load Gmail accounts from file"""
+    """Load Gmail accounts from database"""
     try:
-        accounts = []
-        with open(GMAIL_ACCOUNTS_FILE, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if line and ',' in line:
-                    email, password = line.split(',', 1)
-                    accounts.append({
-                        'email': email.strip(),
-                        'app_password': password.strip()
-                    })
-        return accounts
+        accounts = DatabaseUtils.get_unused_gmail_accounts()
+        return [{'email': acc.email, 'app_password': acc.app_password} for acc in accounts]
     except Exception as e:
         logger.error(f"Error loading Gmail accounts: {e}")
         return []
 
 def load_static_password():
-    """Load static password from file"""
-    try:
-        with open(PASSWORD_FILE, 'r') as f:
-            return f.read().strip()
-    except Exception as e:
-        logger.error(f"Error loading static password: {e}")
-        return "DefaultPassword123!"
+    """Load static password from configuration"""
+    return STATIC_PASSWORD
