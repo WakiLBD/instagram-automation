@@ -14,7 +14,7 @@ class InstagramDashboard {
         this.updateInterval = null;
         
         // Get bot API URL from environment or use default
-        this.BOT_API_URL = window.BOT_API_URL || 'https://your-bot-render-url.onrender.com';
+        this.BOT_API_URL = window.BOT_API_URL || 'https://insta-automation-bot.onrender.com';
         
         this.init();
     }
